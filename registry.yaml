@@ -1,0 +1,100 @@
+version: 1
+features:
+  #  Trend Indicators
+  sma:
+    description: Simple Moving Average
+    params:
+      "on": {type: string, required: true, allowed: [open, high, low, close, volume, vwap]}
+      window: {type: int, required: true}
+  ema:
+    description: Exponential Moving Average
+    params:
+      "on": {type: string, required: true, allowed: [open, high, low, close, volume, vwap]}
+      window: {type: int, required: true}
+  macd:
+    description: Moving Average Convergence Divergence. Multi-output.
+    params:
+      "on": {type: string, required: true, default: 'close', allowed: [open, high, low, close, vwap]}
+      fast_period: {type: int, required: false, default: 12}
+      slow_period: {type: int, required: false, default: 26}
+      signal_period: {type: int, required: false, default: 9}
+
+  #  Momentum Indicators
+  rsi:
+    description: Relative Strength Index
+    params:
+      "on": {type: string, required: true, default: 'close', allowed: [close]}
+      window: {type: int, required: false, default: 14}
+  stoch:
+    description: Stochastic Oscillator. Multi-output (%K, %D).
+    params:
+      high: {type: string, required: true, default: 'high'}
+      low: {type: string, required: true, default: 'low'}
+      close: {type: string, required: true, default: 'close'}
+      k_window: {type: int, required: false, default: 14}
+      d_window: {type: int, required: false, default: 3}
+      
+  #  Volatility Indicators
+  rolling_vol:
+    description: Rolling Volatility (Standard Deviation)
+    params:
+      "on": {type: string, required: true, allowed: [open, high, low, close, vwap, ret]}
+      window: {type: int, required: true}
+  atr:
+    description: Average True Range
+    params:
+      high: {type: string, required: true, default: 'high'}
+      low: {type: string, required: true, default: 'low'}
+      close: {type: string, required: true, default: 'close'}
+      window: {type: int, required: false, default: 14}
+  bbands:
+    description: Bollinger Bands. Multi-output (upper, middle, lower).
+    params:
+      "on": {type: string, required: true, default: 'close', allowed: [open, high, low, close, vwap]}
+      window: {type: int, required: false, default: 20}
+      std_dev: {type: int, required: false, default: 2}
+
+  # Volume Indicators
+  obv:
+    description: On-Balance Volume
+    params:
+      close: {type: string, required: true, default: 'close'}
+      volume: {type: string, required: true, default: 'volume'}
+      
+  #  Basic Transformations & Statistics
+  ret:
+    description: Returns (Log or Simple)
+    params:
+      "on": {type: string, required: true, allowed: [open, high, low, close, vwap]}
+      periods: {type: int, required: false, default: 1}
+      method: {type: string, required: false, default: "log", allowed: [log, simple]}
+  lag:
+    description: Lag a column by N periods
+    params:
+      "on": {type: string, required: true}
+      periods: {type: int, required: true}
+  diff:
+    description: Difference a column by N periods
+    params:
+      "on": {type: string, required: true}
+      periods: {type: int, required: false, default: 1}
+  rolling_max:
+    description: Rolling Maximum
+    params:
+      "on": {type: string, required: true, allowed: [open, high, low, close, vwap]}
+      window: {type: int, required: true}
+  rolling_min:
+    description: Rolling Minimum
+    params:
+      "on": {type: string, required: true, allowed: [open, high, low, close, vwap]}
+      window: {type: int, required: true}
+  zscore:
+    description: Rolling Z-Score
+    params:
+      "on": {type: string, required: true, allowed: [open, high, low, close, vwap, volume]}
+      window: {type: int, required: true}
+      
+  #  Calendar Features
+  session_flags:
+    description: Creates multiple calendar/time-based features from the index.
+    params: {}
