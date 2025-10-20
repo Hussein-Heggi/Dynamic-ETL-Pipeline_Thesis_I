@@ -1,6 +1,9 @@
-import pandas as pd
 import numpy as np
+import pandas as pd
 import yaml
+
+from dsl_validator import validate_dsl
+from llm_translator import get_llm_recipe
 
 
 # --- 1. Helper Functions ---
@@ -154,9 +157,11 @@ FEATURE_IMPLEMENTATIONS = {
 
 
 #  The Main Executor
-# TODO: create a main function to take list of params, prompt an LLM, get the dsl_string, pass it to dsl_validator and get dsl object, then pass it here alongside other required arguments
 def apply_features(df: pd.DataFrame, dsl: dict, registry: dict) -> pd.DataFrame:
-    # Applies features to a DataFrame based on a DSL recipe.
+    """
+    Applies features to a DataFrame based on a validated DSL recipe.
+    Note: DSL should be validated and enriched with defaults before calling this function.
+    """
     if not {"ticker", "ts"}.issubset(df.columns):
         raise ValueError("DataFrame must contain 'ticker' and 'ts' columns.")
 
@@ -197,3 +202,99 @@ def apply_features(df: pd.DataFrame, dsl: dict, registry: dict) -> pd.DataFrame:
         return df_final.copy()
 
     return df_enriched.copy()
+
+
+def enrich_dataframe_from_keywords(
+    df: pd.DataFrame, user_keywords: list[str], registry_path: str = "registry.yaml"
+) -> tuple[pd.DataFrame, dict]:
+    """
+    Main orchestration function that ties together LLM translation,
+    DSL validation, and feature application.
+
+    Args:
+        df: DataFrame with at least 'ticker' and 'ts' columns
+        user_keywords: List of feature keywords/descriptions from the user
+        registry_path: Path to the registry YAML file
+
+    Returns:
+        tuple: (enriched_dataframe, metadata_dict)
+            - enriched_dataframe: DataFrame with new features added
+            - metadata_dict: Contains 'dsl', 'errors', and 'success' status
+
+    Example:
+        >>> df_enriched, metadata = enrich_dataframe_from_keywords(
+        ...     df,
+        ...     ["20 day sma on close", "14 day rsi"],
+        ...     "registry.yaml"
+        ... )
+        >>> if metadata['success']:
+        ...     print(f"Added features: {metadata['dsl']}")
+    """
+    # Load registry
+    with open(registry_path, "r") as f:
+        registry = yaml.safe_load(f)
+
+    # Create allowed features prompt from registry
+    allowed_features_prompt = _create_features_prompt(registry)
+
+    # Get DSL from LLM
+    dsl_string = get_llm_recipe(user_keywords, allowed_features_prompt)
+
+    # Validate and enrich DSL with defaults
+    dsl, errors = validate_dsl(dsl_string, registry)
+
+    metadata = {
+        "dsl_string": dsl_string,
+        "dsl": dsl,
+        "errors": errors,
+        "success": False,
+    }
+
+    if errors:
+        print(f"DSL Validation failed with {len(errors)} error(s):")
+        for error in errors:
+            print(f"  - {error}")
+        return df, metadata
+
+    # Apply features
+    try:
+        df_enriched = apply_features(df, dsl, registry)
+        metadata["success"] = True
+        return df_enriched, metadata
+    except Exception as e:
+        metadata["errors"].append(f"Feature application error: {str(e)}")
+        print(f"Feature application failed: {e}")
+        return df, metadata
+
+
+def _create_features_prompt(registry: dict) -> str:
+    """
+    Helper function to create a formatted prompt describing available features
+    for the LLM from the registry.
+    """
+    lines = []
+    for feature_name, feature_info in registry["features"].items():
+        desc = feature_info.get("description", "")
+        params = feature_info.get("params", {})
+
+        param_list = []
+        for p_name, p_rules in params.items():
+            p_type = p_rules.get("type", "")
+            required = p_rules.get("required", False)
+            default = p_rules.get("default", None)
+            allowed = p_rules.get("allowed", None)
+
+            param_str = f"{p_name} ({p_type})"
+            if required:
+                param_str += " [required]"
+            elif default is not None:
+                param_str += f" [default: {default}]"
+            if allowed:
+                param_str += f" [allowed: {', '.join(map(str, allowed))}]"
+
+            param_list.append(param_str)
+
+        params_str = ", ".join(param_list) if param_list else "no parameters"
+        lines.append(f"- {feature_name}: {desc} ({params_str})")
+
+    return "\n".join(lines)
