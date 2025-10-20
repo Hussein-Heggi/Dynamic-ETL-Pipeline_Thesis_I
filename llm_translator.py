@@ -1,10 +1,13 @@
 import os
 from typing import cast
-from openai import OpenAI
 
+from httpx import URL
+from openai import OpenAI
 
 # Initialize OpenAI client with API key from environment variable
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+if os.getenv("OPENAI_API_BASE_URL"):
+    client.base_url = URL(cast(str, os.getenv("OPENAI_API_BASE_URL")))
 
 
 def get_llm_recipe(user_keywords: list, allowed_features_prompt: str) -> str:
