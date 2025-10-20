@@ -3,7 +3,8 @@ from typing import cast
 from openai import OpenAI
 
 
-client = OpenAI(api_key="")
+# Initialize OpenAI client with API key from environment variable
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 
 def get_llm_recipe(user_keywords: list, allowed_features_prompt: str) -> str:
