@@ -164,16 +164,9 @@ def apply_features(df: pd.DataFrame, dsl: dict, registry: dict) -> pd.DataFrame:
     all_new_cols = []
 
     for request in dsl.get("features", []):
-        name = request["name"]
-        user_params = request.get("params", {})
+        name: str = request["name"]
+        final_params = request.get("params", {})
         impl_func = FEATURE_IMPLEMENTATIONS.get(name)
-
-        final_params = {}
-        registry_params = registry["features"][name].get("params", {})
-        for p_name, p_rules in registry_params.items():
-            if "default" in p_rules:
-                final_params[p_name] = p_rules["default"]
-        final_params.update(user_params)
 
         # Direct Calculation per Group
         result_list = [
