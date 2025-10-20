@@ -59,41 +59,40 @@
             targetPkgs =
               pkgs:
               (with pkgs; [
-                cudatoolkit
-                util-linux
-                m4
-                gperf
-                unzip
-                python311
-                python311Packages.pip
-                python311Packages.virtualenv
-                cmake
-                ninja
-                gcc
-                pre-commit
-                linuxPackages.nvidia_x11
-                xorg.libXi
-                xorg.libXmu
-                freeglut
-                xorg.libXext
-                xorg.libX11
-                xorg.libXv
-                xorg.libXrandr
-                zlib
-                ncurses5
-                stdenv.cc
-                binutils
-                libGLU
-                libGL
-                cudaPackages.cudnn
+                # cudatoolkit
+                # util-linux
+                # m4
+                # gperf
+                # unzip
+                # python311
+                # python311Packages.pip
+                # python311Packages.virtualenv
+                # cmake
+                # ninja
+                # gcc
+                # pre-commit
+                # linuxPackages.nvidia_x11
+                # xorg.libXi
+                # xorg.libXmu
+                # freeglut
+                # xorg.libXext
+                # xorg.libX11
+                # xorg.libXv
+                # xorg.libXrandr
+                # zlib
+                # ncurses5
+                # stdenv.cc
+                # binutils
+                # libGLU
+                # libGL
+                # cudaPackages.cudnn
               ]);
-            runScript = "fish";
-            profile = ''
-              export CUDA_PATH=${pkgs.${system}.cudatoolkit}
-              export LD_LIBRARY_PATH=${pkgs.${system}.linuxPackages.nvidia_x11}/lib
-              export EXTRA_LDFLAGS="-L/lib -L${pkgs.${system}.linuxPackages.nvidia_x11}/lib"
-              export EXTRA_CCFLAGS="-I/usr/include"
-            '';
+            # profile = ''
+            #      export CUDA_PATH=${pkgs.${system}.cudatoolkit}
+            #      export LD_LIBRARY_PATH=${pkgs.${system}.linuxPackages.nvidia_x11}/lib
+            #      export EXTRA_LDFLAGS="-L/lib -L${pkgs.${system}.linuxPackages.nvidia_x11}/lib"
+            #      export EXTRA_CCFLAGS="-I/usr/include"
+            #    '';
           }).env;
       });
       formatter = forAllSystems (system: pkgs.${system}.nixfmt-rfc-style);
