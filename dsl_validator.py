@@ -1,3 +1,4 @@
+import ast
 import json
 
 
@@ -21,6 +22,33 @@ def validate_dsl(dsl_string: str, registry: dict) -> (dict, list):
     for i, feature_req in enumerate(dsl.get("features", [])):
         feature_name = feature_req.get("name")
         feature_parameters = feature_req.get("params", {})
+
+        # Check if this is a custom feature (starts with 'custom_' prefix)
+        is_custom_feature = feature_name and feature_name.startswith("custom_")
+
+        if is_custom_feature:
+            # Validate custom feature parameters
+            if "code" not in feature_parameters:
+                errors.append(
+                    f"Feature {i} ('{feature_name}'): Missing required 'code' parameter for custom feature."
+                )
+            else:
+                # Validate that the code is syntactically valid Python
+                code = feature_parameters["code"]
+                try:
+                    ast.parse(code)
+                except SyntaxError as e:
+                    errors.append(
+                        f"Feature {i} ('{feature_name}'): Invalid Python syntax in code: {str(e)}"
+                    )
+
+            if "as" not in feature_parameters:
+                errors.append(
+                    f"Feature {i} ('{feature_name}'): Missing required 'as' parameter for output column name."
+                )
+
+            # No need to check registry params for custom features
+            continue
 
         if feature_name not in registry["features"]:
             errors.append(f"Feature {i} ('{feature_name}'): Not a supported feature.")

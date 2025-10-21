@@ -151,3 +151,16 @@ features:
   session_flags:
     description: Creates multiple calendar/time-based features from the index.
     params: {}
+
+  #  Custom/Lambda Features
+  # NOTE: 'custom_' is a PREFIX pattern, not a feature name itself.
+  # Any feature with name starting with 'custom_' (e.g., 'custom_price_ratio', 'custom_my_indicator')
+  # will be treated as a custom feature that executes user-provided Python code.
+  # The code runs in a RESTRICTED environment with:
+  #   - Safe builtins only (no file I/O, no imports, no eval, etc.)
+  #   - Access to: numpy (as np), pandas (as pd), math, random modules
+  #   - Input: group DataFrame as variable 'g'
+  #   - Output: Must assign result to variable 'series' (a pd.Series)
+  # Required params:
+  #   - code: Python code string that assigns to 'series'
+  #   - as: Output column name for the resulting feature

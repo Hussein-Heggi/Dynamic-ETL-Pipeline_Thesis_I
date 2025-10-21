@@ -1,6 +1,12 @@
+import math
+import random
+import traceback
+
 import numpy as np
 import pandas as pd
 import yaml
+from RestrictedPython import limited_builtins, safe_globals
+from RestrictedPython.Guards import guarded_iter_unpack_sequence, safe_builtins
 
 from dsl_validator import validate_dsl
 from llm_translator import get_llm_recipe
@@ -12,6 +18,71 @@ def _get_true_range(high: pd.Series, low: pd.Series, close: pd.Series) -> pd.Ser
     tr2 = abs(high - close.shift(1))
     tr3 = abs(low - close.shift(1))
     return pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+
+
+def _execute_custom_code(code: str, group_df: pd.DataFrame) -> pd.Series:
+    """
+    Executes custom user code in a restricted environment using RestrictedPython.
+
+    Args:
+        code: Python code string that should assign result to 'series'
+        group_df: DataFrame for one ticker group
+
+    Returns:
+        pd.Series: The computed series
+
+    Raises:
+        ValueError: If code compilation fails or 'series' is not assigned
+        RuntimeError: If code execution fails
+    """
+    bytecode = compile(code, "<inline>", "exec")
+
+    # Create restricted globals using safe_globals (includes all necessary guards)
+    restricted_globals = safe_globals.copy()
+
+    # Merge safe_builtins and limited_builtins for more complete builtin support
+    merged_builtins = {**safe_builtins, **limited_builtins}
+    restricted_globals["__builtins__"] = merged_builtins
+
+    # Add allowed modules and input data
+    restricted_globals.update(
+        {
+            "np": np,
+            "pd": pd,
+            "math": math,
+            "random": random,
+            # Input data
+            "g": group_df,
+        }
+    )
+
+    # Execute the code
+    try:
+        exec(bytecode, restricted_globals)
+    except Exception as e:
+        # Get full traceback for debugging
+        tb_str = traceback.format_exc()
+        raise RuntimeError(
+            f"Custom code execution failed: {str(e)}\n\nFull traceback:\n{tb_str}"
+        ) from e
+
+    # Retrieve the 'series' variable
+    if "series" not in restricted_globals:
+        raise ValueError(
+            "Custom code must assign result to variable 'series'. "
+            "Example: series = g['close'] / g['open']"
+        )
+
+    result = restricted_globals["series"]
+
+    # Validate that result is a pandas Series
+    if not isinstance(result, pd.Series):
+        raise ValueError(
+            f"Custom code must assign a pandas Series to 'series', "
+            f"but got {type(result).__name__}"
+        )
+
+    return result
 
 
 # --- 2. Feature Implementations (Templates) ---
@@ -171,30 +242,45 @@ def apply_features(df: pd.DataFrame, dsl: dict, registry: dict) -> pd.DataFrame:
     for request in dsl.get("features", []):
         name: str = request["name"]
         final_params = request.get("params", {})
-        impl_func = FEATURE_IMPLEMENTATIONS.get(name)
 
-        # Direct Calculation per Group
-        result_list = [
-            impl_func(group_df, **final_params)
-            for _, group_df in df_enriched.groupby("ticker")
-        ]
-        full_result = pd.concat(result_list)
+        # Check if this is a custom feature
+        if name.startswith("custom_"):
+            # Execute custom code for each group
+            code = final_params["code"]
+            output_col_name = final_params["as"]
 
-        # Assign Results
-        if isinstance(full_result, pd.DataFrame):
-            for col in full_result.columns:
-                output_col_name = f"{name}_{col}"
-                all_new_cols.append(
-                    full_result[[col]].rename(columns={col: output_col_name})
-                )
-        else:
-            output_col_name = request.get(
-                "as",
-                f"{name}_{final_params.get('on', '')}_{final_params.get('window', '')}".rstrip(
-                    "_"
-                ),
-            )
+            result_list = [
+                _execute_custom_code(code, group_df)
+                for _, group_df in df_enriched.groupby("ticker")
+            ]
+            full_result = pd.concat(result_list)
             all_new_cols.append(full_result.rename(output_col_name))
+        else:
+            # Use standard feature implementation
+            impl_func = FEATURE_IMPLEMENTATIONS.get(name)
+
+            # Direct Calculation per Group
+            result_list = [
+                impl_func(group_df, **final_params)
+                for _, group_df in df_enriched.groupby("ticker")
+            ]
+            full_result = pd.concat(result_list)
+
+            # Assign Results
+            if isinstance(full_result, pd.DataFrame):
+                for col in full_result.columns:
+                    output_col_name = f"{name}_{col}"
+                    all_new_cols.append(
+                        full_result[[col]].rename(columns={col: output_col_name})
+                    )
+            else:
+                output_col_name = request.get(
+                    "as",
+                    f"{name}_{final_params.get('on', '')}_{final_params.get('window', '')}".rstrip(
+                        "_"
+                    ),
+                )
+                all_new_cols.append(full_result.rename(output_col_name))
 
     # Combine original df with all new feature columns at once
     if all_new_cols:

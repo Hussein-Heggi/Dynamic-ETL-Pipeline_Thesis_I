@@ -1,0 +1,192 @@
+Sample DataFrame:
+  ticker                  ts        open  ...         low       close        volume
+0   AAPL 2024-01-01 00:00:00  137.454012  ...  105.168172  105.168172  1.412495e+06
+1   AAPL 2024-01-01 01:00:00  195.071431  ...  108.413996  153.135463  4.610212e+06
+2   AAPL 2024-01-01 02:00:00  173.199394  ...  116.162871  154.063512  3.021009e+06
+3   AAPL 2024-01-01 03:00:00  159.865848  ...  159.865848  163.742990  4.305830e+06
+4   AAPL 2024-01-01 04:00:00  115.601864  ...  115.601864  172.609133  2.280198e+06
+
+[5 rows x 7 columns]
+
+================================================================================
+Test 1: Simple single-line custom feature (price-to-open ratio)
+================================================================================
+DSL: {'features': [{'name': 'custom_price_ratio', 'params': {'code': "series = g['close'] / g['open']", 'as': 'close_open_ratio'}}]}
+
+New columns added: ['close_open_ratio']
+
+Sample results:
+  ticker       close        open  close_open_ratio
+0   AAPL  105.168172  137.454012          0.765115
+1   AAPL  153.135463  195.071431          0.785023
+2   AAPL  154.063512  173.199394          0.889515
+3   AAPL  163.742990  159.865848          1.024252
+4   AAPL  172.609133  115.601864          1.493135
+5   AAPL  197.585208  115.599452          1.709223
+6   AAPL  151.630035  105.808361          1.433063
+7   AAPL  132.295647  186.617615          0.708913
+8   AAPL  179.518619  160.111501          1.121210
+9   AAPL  127.083225  170.807258          0.744015
+✓ Test 1 - Simple custom feature: PASSED
+
+================================================================================
+Test 2: Multi-line custom feature (normalized momentum)
+================================================================================
+DSL: {'features': [{'name': 'custom_norm_momentum', 'params': {'code': "momentum = g['close'] - g['close'].shift(5)\nrolling_std = g['close'].rolling(10).std()\nseries = momentum / rolling_std", 'as': 'normalized_momentum_5_10'}}]}
+
+New columns added: ['normalized_momentum_5_10']
+
+Sample results:
+   ticker       close  normalized_momentum_5_10
+0    AAPL  105.168172                       NaN
+1    AAPL  153.135463                       NaN
+2    AAPL  154.063512                       NaN
+3    AAPL  163.742990                       NaN
+4    AAPL  172.609133                       NaN
+5    AAPL  197.585208                       NaN
+6    AAPL  151.630035                       NaN
+7    AAPL  132.295647                       NaN
+8    AAPL  179.518619                       NaN
+9    AAPL  127.083225                 -1.684016
+10   AAPL  143.897142                 -2.494298
+11   AAPL  107.845638                 -1.639849
+12   AAPL  102.535074                 -0.957256
+13   AAPL  196.264841                  0.486061
+14   AAPL  183.598012                  1.597495
+✓ Test 2 - Multiline custom feature: PASSED
+
+================================================================================
+Test 3: Mix of standard and custom features
+================================================================================
+DSL: {'features': [{'name': 'sma', 'params': {'on': 'close', 'window': 10}}, {'name': 'custom_midpoint', 'params': {'code': "series = (g['high'] + g['low']) / 2", 'as': 'hl_midpoint'}}, {'name': 'rsi', 'params': {'on': 'close', 'window': 14}}]}
+
+New columns added: ['sma_close_10', 'hl_midpoint', 'rsi_close_14']
+
+Sample results:
+   ticker       close        high  ...  sma_close_10  hl_midpoint  rsi_close_14
+0    AAPL  105.168172  164.203165  ...           NaN   134.685668           NaN
+1    AAPL  153.135463  195.071431  ...           NaN   151.742714           NaN
+2    AAPL  154.063512  173.199394  ...           NaN   144.681133           NaN
+3    AAPL  163.742990  189.855419  ...           NaN   174.860634           NaN
+4    AAPL  172.609133  190.756647  ...           NaN   153.179256           NaN
+5    AAPL  197.585208  197.585208  ...           NaN   149.252457           NaN
+6    AAPL  151.630035  151.630035  ...           NaN   128.719198           NaN
+7    AAPL  132.295647  186.617615  ...           NaN   159.456631           NaN
+8    AAPL  179.518619  179.518619  ...           NaN   140.012389           NaN
+9    AAPL  127.083225  170.807258  ...    153.683201   143.444031           NaN
+10   AAPL  143.897142  154.873379  ...    157.556098   128.465914           NaN
+11   AAPL  107.845638  196.990985  ...    153.027115   152.418312           NaN
+12   AAPL  102.535074  192.969765  ...    147.874271   147.752420           NaN
+13   AAPL  196.264841  196.264841  ...    151.126456   158.749376           NaN
+14   AAPL  183.598012  183.598012  ...    152.225344   150.890254     59.294011
+
+[15 rows x 7 columns]
+✓ Test 3 - Mix of standard and custom features: PASSED
+
+================================================================================
+Test 4: Invalid custom feature - syntax error
+================================================================================
+Validation errors (expected):
+  - Feature 0 ('custom_bad_syntax'): Invalid Python syntax in code: invalid syntax (<unknown>, line 1)
+✓ Test 4 - Syntax error detection: PASSED
+
+================================================================================
+Test 5: Custom feature missing 'series' assignment
+================================================================================
+Attempting to apply features (should fail at runtime):
+✓ EXPECTED ERROR: Custom code must assign result to variable 'series'. Example: series = g['close'] / g['open']
+✓ Test 5 - Missing 'series' variable detection: PASSED
+
+================================================================================
+Test 6: Security - Attempt to open a file (should fail)
+================================================================================
+✓ BLOCKED: Custom code execution failed: name 'open' is not defined
+
+Full traceback:
+Traceback (most recent call last):
+  File "/home/alyaman/Git/Dynamic-ETL-Pipeline_Thesis_I/enrichment.py", line 61, in _execute_custom_code
+    exec(bytecode, restricted_globals)
+  File "<inline>", line 1, in <module>
+NameError: name 'open' is not defined
+
+✓ Test 6 - Block file access: PASSED
+
+================================================================================
+Test 7: Security - Attempt to import os (should fail)
+================================================================================
+✓ BLOCKED: Custom code execution failed: __import__ not found
+
+Full traceback:
+Traceback (most recent call last):
+  File "/home/alyaman/Git/Dynamic-ETL-Pipeline_Thesis_I/enrichment.py", line 61, in _execute_custom_code
+    exec(bytecode, restricted_globals)
+  File "<inline>", line 1, in <module>
+ImportError: __import__ not found
+
+✓ Test 7 - Block imports: PASSED
+
+================================================================================
+Test 8: Security - Attempt to use eval (should fail)
+================================================================================
+✓ BLOCKED: Custom code execution failed: name 'eval' is not defined
+
+Full traceback:
+Traceback (most recent call last):
+  File "/home/alyaman/Git/Dynamic-ETL-Pipeline_Thesis_I/enrichment.py", line 61, in _execute_custom_code
+    exec(bytecode, restricted_globals)
+  File "<inline>", line 1, in <module>
+NameError: name 'eval' is not defined
+
+✓ Test 8 - Block eval: PASSED
+
+================================================================================
+Test 9: Security - Attempt to use exec (should fail)
+================================================================================
+✓ BLOCKED: Custom code execution failed: name 'exec' is not defined
+
+Full traceback:
+Traceback (most recent call last):
+  File "/home/alyaman/Git/Dynamic-ETL-Pipeline_Thesis_I/enrichment.py", line 61, in _execute_custom_code
+    exec(bytecode, restricted_globals)
+  File "<inline>", line 1, in <module>
+NameError: name 'exec' is not defined
+
+✓ Test 9 - Block exec: PASSED
+
+================================================================================
+Test 10: Security - Attempt to list directory (should fail)
+================================================================================
+✓ BLOCKED: Custom code execution failed: __import__ not found
+
+Full traceback:
+Traceback (most recent call last):
+  File "/home/alyaman/Git/Dynamic-ETL-Pipeline_Thesis_I/enrichment.py", line 61, in _execute_custom_code
+    exec(bytecode, restricted_globals)
+  File "<inline>", line 1, in <module>
+ImportError: __import__ not found
+
+✓ Test 10 - Block directory listing: PASSED
+
+================================================================================
+Test 11: Security - Attempt to access __builtins__ (should fail)
+================================================================================
+✓ BLOCKED: Custom code execution failed: 'open'
+
+Full traceback:
+Traceback (most recent call last):
+  File "/home/alyaman/Git/Dynamic-ETL-Pipeline_Thesis_I/enrichment.py", line 61, in _execute_custom_code
+    exec(bytecode, restricted_globals)
+  File "<inline>", line 1, in <module>
+KeyError: 'open'
+
+✓ Test 11 - Block __builtins__ access: PASSED
+
+================================================================================
+TEST SUMMARY
+================================================================================
+Total tests: 11
+Passed: 11 ✓
+Failed: 0 ✗
+================================================================================
+🎉 ALL TESTS PASSED!
+================================================================================
