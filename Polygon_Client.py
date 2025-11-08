@@ -38,7 +38,7 @@ class PolygonClient(BaseAPIClient):
                 date=f['from']
             ),
             3: lambda f: self.client.get_previous_close_agg(
-                ticker=f['ticker']
+                ticker=f['ticker']  
             )
         }
         endpoint_type = features.get('endpoint_type', 0)
@@ -73,25 +73,18 @@ class PolygonClient(BaseAPIClient):
 
         df = pd.DataFrame(records)
 
-        # info: Dict[str, Any] = {
-        #     'company_identifier': params.get('ticker'),
-        #     'start': params.get('from'),
-        #     'end': params.get('to'),
-        #     'timespan': params.get('timespan'),
-        #     'multiplier': params.get('multiplier'),
-        #     'description': self.endpoint_descriptions.get(params.get('endpoint_type', 0))
-        # }
-        #return df, info
+
         return df
 
-    def compute_statistics(self, df: pd.DataFrame) -> Dict[str, Any]:
-        """
-        Compute descriptive statistics on the DataFrame.
-        """
-        stats: Dict[str, Any] = {
-            'descriptive_stats': df.describe().to_dict(),
-            'missing_values': df.isnull().sum().to_dict(),
-            'skewness': df.skew().to_dict(),
-            'kurtosis': df.kurtosis().to_dict()
-        }
-        return stats
+    # def compute_statistics(self, df: pd.DataFrame) -> Dict[str, Any]:
+    #     """
+    #     Compute descriptive statistics on the DataFrame.
+    #     """
+    #     stats: Dict[str, Any] = {
+    #         'descriptive_stats': df.describe().to_dict(),
+    #         'missing_values': df.isnull().sum().to_dict(),
+    #         'skewness': df.skew().to_dict(),
+    #         'kurtosis': df.kurtosis().to_dict()
+    #     }
+    #     return stats
+ 

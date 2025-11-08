@@ -8,6 +8,69 @@ import torch
 import json
 import re
 
+api_endpoint_map = {
+    "alpha_vantage": {
+        "endpoints": [
+            "TIME_SERIES_INTRADAY", "TIME_SERIES_DAILY", "TIME_SERIES_WEEKLY", 
+            "TIME_SERIES_MONTHLY"
+        ],
+        "endpoint_descriptions": {
+            "TIME_SERIES_INTRADAY": "Intraday stock price data at 1, 5, 15, 30, or 60 minute intervals for short-term trading",
+            "TIME_SERIES_DAILY": "Daily historical stock prices with open, high, low, close and volume data",
+            "TIME_SERIES_WEEKLY": "Weekly aggregated stock price data for longer-term analysis", 
+            "TIME_SERIES_MONTHLY": "Monthly historical stock prices for long-term investment analysis"
+        },
+        "endpoint_params": {
+            "TIME_SERIES_INTRADAY": {
+                "required": ["ticker", "timespan"],
+                "optional": ["outputsize", "month"]
+            },
+            "TIME_SERIES_DAILY": {
+                "required": ["ticker"],
+                "optional": ["outputsize"]
+            },
+            "TIME_SERIES_WEEKLY": {
+                "required": ["ticker"],
+                "optional": ["outputsize"]
+            },
+            "TIME_SERIES_MONTHLY": {
+                "required": ["ticker"],
+                "optional": ["outputsize"]
+            }
+        }
+    },
+    "polygon": {
+        "endpoints": [
+            "get_aggs", "get_grouped_daily_aggs", "get_daily_open_close_agg", 
+            "get_previous_close_agg"
+        ],
+        "endpoint_descriptions": {
+            "get_aggs": "Aggregated stock price bars with custom timeframes and technical indicators",
+            "get_grouped_daily_aggs": "Bulk daily stock data for all tickers on specific market dates",
+            "get_daily_open_close_agg": "Specific daily opening and closing prices for individual stocks",
+            "get_previous_close_agg": "Previous trading day closing prices and market summary data"
+        },
+        "endpoint_params": {
+            "get_aggs": {
+                "required": ["ticker"],
+                "optional": ["multiplier", "timespan", "from", "to", "adjusted", "sort", "limit"]
+            },
+            "get_grouped_daily_aggs": {
+                "required": ["date"],
+                "optional": ["adjusted"]
+            },
+            "get_daily_open_close_agg": {
+                "required": ["ticker", "date"],
+                "optional": ["adjusted"]
+            },
+            "get_previous_close_agg": {
+                "required": ["ticker"],
+                "optional": ["adjusted"]
+            }
+        }
+    }
+}
+
 class endpointMatcher:
     """
     A class that matches user prompts to API endpoints using:
@@ -155,20 +218,38 @@ class endpointMatcher:
         Returns dictionary where each endpoint appears only once with its highest score
         """
         phrase_embeddings = self.generate_embeddings(phrases)
-        D, I = self.index.search(phrase_embeddings, k=1)
+        
+        # OLD CODE - only picks top 1 match per phrase
+        # D, I = self.index.search(phrase_embeddings, k=1)
+        
+        # NEW CODE - returns multiple matches per keyword (top 3)
+        D, I = self.index.search(phrase_embeddings, k=3)
         
         # First pass - collect all matches
         all_matches = {}
         for i, phrase in enumerate(phrases):
-            score = D[i][0]
-            if score > 0.5:  # Similarity threshold
-                matched_endpoint = self.endpoint_names[I[i][0]]
-                if matched_endpoint not in all_matches or score > all_matches[matched_endpoint]['score']:
-                    all_matches[matched_endpoint] = {
-                        'phrase': phrase,
-                        'score': round(score, 2),
-                        'apis': self.endpoint_info[matched_endpoint]['apis']
-                    }
+            # OLD CODE - only uses the first/best match
+            # score = D[i][0]
+            # if score > 0.5:  # Similarity threshold
+            #     matched_endpoint = self.endpoint_names[I[i][0]]
+            #     if matched_endpoint not in all_matches or score > all_matches[matched_endpoint]['score']:
+            #         all_matches[matched_endpoint] = {
+            #             'phrase': phrase,
+            #             'score': round(score, 2),
+            #             'apis': self.endpoint_info[matched_endpoint]['apis']
+            #         }
+            
+            # *checks all k matches for this phrase instead of just the first
+            for j in range(len(D[i])):  # Iterate through all matches
+                score = D[i][j]
+                if score > 0.5:  # Similarity threshold
+                    matched_endpoint = self.endpoint_names[I[i][j]]
+                    if matched_endpoint not in all_matches or score > all_matches[matched_endpoint]['score']:
+                        all_matches[matched_endpoint] = {
+                            'phrase': phrase,
+                            'score': round(score, 2),
+                            'apis': self.endpoint_info[matched_endpoint]['apis']
+                        }
         
         # Convert to phrase-keyed dictionary (optional)
         matches = {
@@ -205,13 +286,24 @@ class endpointMatcher:
         recommended_apis = set()
         api_endpoint_map = {}
         
+        # DEDUPLICATION: Track which endpoints we've already added
+        seen_endpoints = set()
+        
         for match in sem_matches.values():
+            endpoint_name = match['endpoint']
+            
+            # Skip if we've already processed this endpoint
+            if endpoint_name in seen_endpoints:
+                continue
+                
+            seen_endpoints.add(endpoint_name)
+            
             for api in match['apis']:
                 recommended_apis.add(api)
                 if api not in api_endpoint_map:
                     api_endpoint_map[api] = []
                 api_endpoint_map[api].append({
-                    'endpoint': match['endpoint'],
+                    'endpoint': endpoint_name,
                     'score': match['score']
                 })
         
@@ -269,12 +361,6 @@ class endpointMatcher:
         if response:
             parsed = self._parse_params_from_response(response, param_schema)
             if parsed:
-                # Validate required parameters exist
-                for req_param in param_schema['required']:
-                    if req_param not in parsed:
-                        print(f"Warning: Missing required parameter {req_param} for {endpoint_name}")
-                        return None
-                        
                 # Only include parameters that are in the schema
                 valid_params = {}
                 for param in param_schema['required'] + param_schema['optional']:
@@ -283,10 +369,34 @@ class endpointMatcher:
                 
                 params.update(valid_params)
         
+        # Add default parameters for missing required ones
+        for req_param in param_schema['required']:
+            if req_param not in params:
+                # Provide sensible defaults for missing required parameters
+                default_values = {
+                    'ticker': 'AAPL',  # Default ticker
+                    'timespan': 'day',  # Default timespan
+                    'date': '2023-01-01',  # Default date
+                    'multiplier': 1,  # Default multiplier
+                }
+                if req_param in default_values:
+                    params[req_param] = default_values[req_param]
+                    print(f"Added default value for missing required parameter: {req_param} = {default_values[req_param]}")
+        
         # Add temporal parameters if needed
         if endpoint_name.startswith('TIME_SERIES'):
-            if temporal_info['is_relative'] and 'outputsize' in param_schema['optional']:
+            if temporal_info['is_relative'] and 'outputsize' in param_schema.get('optional', []):
                 params['outputsize'] = 'compact'
+            elif temporal_info['exact_dates']:
+                # Use the first exact date found for date parameters
+                if endpoint_name in ['get_daily_open_close_agg', 'get_grouped_daily_aggs']:
+                    params['date'] = temporal_info['exact_dates'][0]
+        
+        # Fix for Alpha Vantage timespan parameter
+        if api_name == 'alpha_vantage' and endpoint_name == 'TIME_SERIES_INTRADAY':
+            # Ensure timespan is one of the valid intervals
+            if 'timespan' not in params:
+                params['timespan'] = '5min'  # Default to 5min
         
         return params if params else None
 
@@ -394,232 +504,9 @@ class endpointMatcher:
                 return None
 
 if __name__ == "__main__":
-    api_endpoint_map = {
-        "alpha_vantage_api": {
-            "endpoints": [
-                "TIME_SERIES_INTRADAY",
-                "TIME_SERIES_DAILY",
-                "TIME_SERIES_DAILY_ADJUSTED",
-                "TIME_SERIES_WEEKLY",
-                "TIME_SERIES_WEEKLY_ADJUSTED",
-                "TIME_SERIES_MONTHLY",
-                "TIME_SERIES_MONTHLY_ADJUSTED",
-                "GLOBAL_QUOTE",
-                "SYMBOL_SEARCH",
-                "CURRENCY_EXCHANGE_RATE",
-                "FX_INTRADAY",
-                "FX_DAILY",
-                "FX_WEEKLY",
-                "FX_MONTHLY",
-                "SMA",
-                "EMA",
-                "MACD",
-                "RSI",
-                "BBANDS",
-                "VWAP"
-            ],
-            "endpoint_descriptions": {
-                "TIME_SERIES_INTRADAY": "Get intraday time series (1min, 5min, 15min, 30min, 60min intervals)",
-                "TIME_SERIES_DAILY": "Daily historical prices (last 20+ years)",
-                "TIME_SERIES_DAILY_ADJUSTED": "Daily prices adjusted for splits/dividends",
-                "TIME_SERIES_WEEKLY": "Weekly historical prices",
-                "TIME_SERIES_WEEKLY_ADJUSTED": "Weekly prices adjusted for splits/dividends",
-                "TIME_SERIES_MONTHLY": "Monthly historical prices",
-                "TIME_SERIES_MONTHLY_ADJUSTED": "Monthly prices adjusted for splits/dividends",
-                "GLOBAL_QUOTE": "Latest price and volume data",
-                "SYMBOL_SEARCH": "Search for ticker symbols and company names",
-                "CURRENCY_EXCHANGE_RATE": "Real-time forex rates",
-                "FX_INTRADAY": "Intraday foreign exchange rates",
-                "FX_DAILY": "Daily foreign exchange rates",
-                "FX_WEEKLY": "Weekly foreign exchange rates",
-                "FX_MONTHLY": "Monthly foreign exchange rates",
-                "SMA": "Simple Moving Average technical indicator",
-                "EMA": "Exponential Moving Average technical indicator",
-                "MACD": "Moving Average Convergence Divergence technical indicator",
-                "RSI": "Relative Strength Index technical indicator",
-                "BBANDS": "Bollinger Bands technical indicator",
-                "VWAP": "Volume Weighted Average Price (intraday only)"
-            },
-            "endpoint_params": {
-                "TIME_SERIES_INTRADAY": {
-                    "required": ["symbol", "interval"],
-                    "optional": ["outputsize", "datatype", "adjusted", "extended_hours", "month", "outputsize"]
-                },
-                "TIME_SERIES_DAILY": {
-                    "required": ["symbol"],
-                    "optional": ["outputsize", "datatype"]
-                },
-                "TIME_SERIES_DAILY_ADJUSTED": {
-                    "required": ["symbol"],
-                    "optional": ["outputsize", "datatype"]
-                },
-                "TIME_SERIES_WEEKLY": {
-                    "required": ["symbol"],
-                    "optional": ["datatype"]
-                },
-                "TIME_SERIES_WEEKLY_ADJUSTED": {
-                    "required": ["symbol"],
-                    "optional": ["datatype"]
-                },
-                "TIME_SERIES_MONTHLY": {
-                    "required": ["symbol"],
-                    "optional": ["datatype"]
-                },
-                "TIME_SERIES_MONTHLY_ADJUSTED": {
-                    "required": ["symbol"],
-                    "optional": ["datatype"]
-                },
-                "GLOBAL_QUOTE": {
-                    "required": ["symbol"],
-                    "optional": ["datatype"]
-                },
-                "SYMBOL_SEARCH": {
-                    "required": ["keywords"],
-                    "optional": ["datatype"]
-                },
-                "CURRENCY_EXCHANGE_RATE": {
-                    "required": ["from_currency", "to_currency"],
-                    "optional": ["datatype"]
-                },
-                "FX_INTRADAY": {
-                    "required": ["from_symbol", "to_symbol", "interval"],
-                    "optional": ["outputsize", "datatype"]
-                },
-                "FX_DAILY": {
-                    "required": ["from_symbol", "to_symbol"],
-                    "optional": ["outputsize", "datatype"]
-                },
-                "FX_WEEKLY": {
-                    "required": ["from_symbol", "to_symbol"],
-                    "optional": ["datatype"]
-                },
-                "FX_MONTHLY": {
-                    "required": ["from_symbol", "to_symbol"],
-                    "optional": ["datatype"]
-                },
-                "SMA": {
-                    "required": ["symbol", "interval", "time_period", "series_type"],
-                    "optional": ["datatype"]
-                },
-                "EMA": {
-                    "required": ["symbol", "interval", "time_period", "series_type"],
-                    "optional": ["datatype"]
-                },
-                "MACD": {
-                    "required": ["symbol", "interval", "series_type"],
-                    "optional": ["fastperiod", "slowperiod", "signalperiod", "datatype"]
-                },
-                "RSI": {
-                    "required": ["symbol", "interval", "time_period", "series_type"],
-                    "optional": ["datatype"]
-                },
-                "BBANDS": {
-                    "required": ["symbol", "interval", "time_period", "series_type"],
-                    "optional": ["nbdevup", "nbdevdn", "matype", "datatype"]
-                },
-                "VWAP": {
-                    "required": ["symbol", "interval"],
-                    "optional": ["datatype"]
-                }
-            }
-        },
-        "polygon_api": {
-            "endpoints": [
-                "V2_AGGS_TICKER_RANGE",
-                "V1_OPEN_CLOSE",
-                "V2_AGGS_GROUPED_LOCALE_MARKET_DATE",
-                "V2_AGGS_TICKER_PREV",
-                "V3_TRADES",
-                "V3_QUOTES",
-                "V1_LAST_STOCKS",
-                "V1_LAST_QUOTE_STOCKS",
-                "V2_SNAPSHOT_LOCALE_MARKETS_TICKERS",
-                "V2_SNAPSHOT_LOCALE_MARKETS_TICKER",
-                "V3_REFERENCE_TICKERS",
-                "V3_REFERENCE_TICKER",
-                "VX_SIMPLE_MOVINGAVERAGE",
-                "VX_TECHNICAL_INDICATORS"
-            ],
-            "endpoint_descriptions": {
-                "V2_AGGS_TICKER_RANGE": "Stock price history with open/high/low/close/volume (custom timeframes: minute, hour, day, week, month)",
-                "V1_OPEN_CLOSE": "Daily opening and closing prices for specific date (includes after-hours data)",
-                "V2_AGGS_GROUPED_LOCALE_MARKET_DATE": "Market-wide stock prices for specific day (all tickers in exchange)",
-                "V2_AGGS_TICKER_PREV": "Previous day's stock market data (closing price and trading volume)",
-                "V3_TRADES": "Historical trade-by-trade data (execution prices, sizes, timestamps)",
-                "V3_QUOTES": "Historical bid/ask quotes (NBBO market data with timestamps)",
-                "V1_LAST_STOCKS": "Latest trade price and details (real-time last transaction)",
-                "V1_LAST_QUOTE_STOCKS": "Latest bid/ask prices (real-time market quote)",
-                "V2_SNAPSHOT_LOCALE_MARKETS_TICKERS": "Current market prices for all stocks (real-time snapshot)",
-                "V2_SNAPSHOT_LOCALE_MARKETS_TICKER": "Current stock market data (price, volume, bid/ask spread)",
-                "V3_REFERENCE_TICKERS": "Stock symbol search (ticker lookup and company names)",
-                "V3_REFERENCE_TICKER": "Company profile data (financial reference information)",
-                "VX_SIMPLE_MOVINGAVERAGE": "Stock technical analysis: Simple Moving Average (SMA values)",
-                "VX_TECHNICAL_INDICATORS": "Technical indicators for stocks (RSI, MACD, Bollinger Bands)"
-            },
-            "endpoint_params": {
-                "V2_AGGS_TICKER_RANGE": {
-                    "required": ["ticker"],
-                    "optional": ["multiplier", "timespan", "from", "to", "adjusted", "sort", "limit"]
-                },
-                "V1_OPEN_CLOSE": {
-                    "required": ["ticker", "date"],
-                    "optional": ["adjusted"]
-                },
-                "V2_AGGS_GROUPED_LOCALE_MARKET_DATE": {
-                    "required": ["locale", "market", "date"],
-                    "optional": ["adjusted"]
-                },
-                "V2_AGGS_TICKER_PREV": {
-                    "required": ["ticker"],
-                    "optional": ["adjusted"]
-                },
-                "V3_TRADES": {
-                    "required": ["ticker"],
-                    "optional": ["timestamp", "timestamp.lt", "timestamp.lte", "timestamp.gt", "timestamp.gte", "limit", "order", "sort"]
-                },
-                "V3_QUOTES": {
-                    "required": ["ticker"],
-                    "optional": ["timestamp", "timestamp.lt", "timestamp.lte", "timestamp.gt", "timestamp.gte", "limit", "order", "sort"]
-                },
-                "V1_LAST_STOCKS": {
-                    "required": ["ticker"],
-                    "optional": []
-                },
-                "V1_LAST_QUOTE_STOCKS": {
-                    "required": ["ticker"],
-                    "optional": []
-                },
-                "V2_SNAPSHOT_LOCALE_MARKETS_TICKERS": {
-                    "required": ["locale", "market"],
-                    "optional": []
-                },
-                "V2_SNAPSHOT_LOCALE_MARKETS_TICKER": {
-                    "required": ["locale", "market", "ticker"],
-                    "optional": []
-                },
-                "V3_REFERENCE_TICKERS": {
-                    "required": [],
-                    "optional": ["ticker", "type", "market", "exchange", "cusip", "cik", "date", "search", "active", "sort", "order", "limit"]
-                },
-                "V3_REFERENCE_TICKER": {
-                    "required": ["ticker"],
-                    "optional": []
-                },
-                "VX_SIMPLE_MOVINGAVERAGE": {
-                    "required": ["ticker", "window"],
-                    "optional": ["timespan", "adjusted", "series_type", "expand_underlying"]
-                },
-                "VX_TECHNICAL_INDICATORS": {
-                    "required": ["ticker", "indicator"],
-                    "optional": ["timespan", "window", "series_type", "time_period", "sd", "ma_type"]
-                }
-            }
-        }
-    }
-
     matcher = endpointMatcher(api_endpoint_map, embedding_model="ProsusAI/finbert")
 
-    prompt = "Show me the daily adjusted closing prices, trading volume, and 50-day simple moving average for Apple (APPL) from January 1st to March 31st 2023, along with the most recent quote data."
+    prompt = "For Apple (AAPL), show me its most recent previous close using get_previous_close_agg, its open and close prices on January 15, 2023 using get_daily_open_close_agg, grouped daily aggregate data for all U.S. stocks on that same date using get_grouped_daily_aggs, the latest trade and last quote for Apple, a full daily FX series against USD, the weekly and monthly time series, the daily VWAP, and also a snapshot of Apple in the U.S. stock market."
     endpoint_matches, recommended_apis, api_endpoint_mapping, endpoint_params = matcher.match_prompt(prompt)
     
     # Print results in the requested format

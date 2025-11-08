@@ -160,46 +160,46 @@ class AlphaVantageClient(BaseAPIClient):
             final_columns = [col for col in columns_to_include if col in df.columns]
             df = df[final_columns] # Keep only the requested & available columns
 
-            return df, final_columns
+            return df
 
         except Exception as e:
             print(f"Error parsing Alpha Vantage response: {e}")
             raise ValueError(f"Failed to parse time series data. Error: {e}")
 
 
-    def compute_statistics(self, df: pd.DataFrame) -> Dict[str, Any]:
-        """
-        Compute descriptive statistics on the parsed DataFrame.
+    # def compute_statistics(self, df: pd.DataFrame) -> Dict[str, Any]:
+    #     """
+    #     Compute descriptive statistics on the parsed DataFrame.
 
-        Args:
-            df (pd.DataFrame): The DataFrame returned by parse_response.
+    #     Args:
+    #         df (pd.DataFrame): The DataFrame returned by parse_response.
 
-        Returns:
-            Dict[str, Any]: A dictionary containing computed statistics:
-                - 'descriptive_stats': Basic statistics (mean, std, min, max, etc.).
-                - 'missing_values': Count of NaN values per column.
-                - 'skewness': Skewness of numeric columns.
-                - 'kurtosis': Kurtosis of numeric columns.
-                - 'shape': Tuple representing (rows, columns) of the DataFrame.
-                - 'column_types': Data types of each column.
-        """
-        stats = {}
-        numeric_df = df.select_dtypes(include='number') # Operate only on numeric columns
+    #     Returns:
+    #         Dict[str, Any]: A dictionary containing computed statistics:
+    #             - 'descriptive_stats': Basic statistics (mean, std, min, max, etc.).
+    #             - 'missing_values': Count of NaN values per column.
+    #             - 'skewness': Skewness of numeric columns.
+    #             - 'kurtosis': Kurtosis of numeric columns.
+    #             - 'shape': Tuple representing (rows, columns) of the DataFrame.
+    #             - 'column_types': Data types of each column.
+    #     """
+    #     stats = {}
+    #     numeric_df = df.select_dtypes(include='number') # Operate only on numeric columns
 
-        if not numeric_df.empty:
-            stats["descriptive_stats"] = numeric_df.describe().to_dict()
-            stats["skewness"] = numeric_df.skew().to_dict()
-            stats["kurtosis"] = numeric_df.kurtosis().to_dict()
-        else:
-            stats["descriptive_stats"] = {}
-            stats["skewness"] = {}
-            stats["kurtosis"] = {}
+    #     if not numeric_df.empty:
+    #         stats["descriptive_stats"] = numeric_df.describe().to_dict()
+    #         stats["skewness"] = numeric_df.skew().to_dict()
+    #         stats["kurtosis"] = numeric_df.kurtosis().to_dict()
+    #     else:
+    #         stats["descriptive_stats"] = {}
+    #         stats["skewness"] = {}
+    #         stats["kurtosis"] = {}
 
-        stats["missing_values"] = df.isnull().sum().to_dict()
-        stats["shape"] = df.shape
-        stats["column_types"] = df.dtypes.astype(str).to_dict()
+    #     stats["missing_values"] = df.isnull().sum().to_dict()
+    #     stats["shape"] = df.shape
+    #     stats["column_types"] = df.dtypes.astype(str).to_dict()
 
-        return stats
+    #     return stats
 
 # Example usage (ensure base_api_client.py is accessible)
 if __name__ == "__main__":

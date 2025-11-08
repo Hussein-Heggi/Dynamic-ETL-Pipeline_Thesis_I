@@ -18,12 +18,12 @@ class BaseAPIClient(ABC):
         pass
     
     
-    @abstractmethod
-    def compute_statistics(self, df: pd.DataFrame) -> Dict[str, Any]:
-        """
-        Compute statistics on the DataFrame.
-        Returns a dictionary with computed metrics (e.g. descriptive stats, missing values, etc.)
-        The implementation can be customized per API client.
-        """
-        pass
+    # @abstractmethod
+    # def compute_statistics(self, df: pd.DataFrame) -> Dict[str, Any]:
+    #     """
+    #     Compute statistics on the DataFrame.
+    #     Returns a dictionary with computed metrics (e.g. descriptive stats, missing values, etc.)
+    #     The implementation can be customized per API client.
+    #     """
+    #     pass
     
