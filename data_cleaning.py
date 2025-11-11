@@ -254,6 +254,6 @@ def pipeline_clean(
     return cleaned, report
 
 
-clean_df, report = pipeline_clean("data_cleaning_dirty.csv")
-print(clean_df)
-print(report)
+# clean_df, report = pipeline_clean("data_cleaning_dirty.csv")
+# print(clean_df)
+# print(report)
