@@ -9,8 +9,12 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 if os.getenv("OPENAI_API_BASE_URL"):
     client.base_url = URL(cast(str, os.getenv("OPENAI_API_BASE_URL")))
 
+model = (
+    os.getenv("OPENAI_API_MODEL") if os.getenv("OPENAI_API_MODEL") else "gpt-4o-mini"
+)
 
-def get_llm_recipe(user_keywords: list, allowed_features_prompt: str) -> str:
+
+def get_llm_recipe(user_keywords: list[str], allowed_features_prompt: str) -> str:
     """
     Calls the OpenAI API to translate user keywords into a DSL JSON recipe.
     """
@@ -101,7 +105,7 @@ KEY FEATURES LIST:
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=model,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
