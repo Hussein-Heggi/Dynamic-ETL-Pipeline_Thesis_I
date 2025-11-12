@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import yaml
 from RestrictedPython import limited_builtins, safe_globals
-from RestrictedPython.Guards import guarded_iter_unpack_sequence, safe_builtins
+from RestrictedPython.Guards import safe_builtins
 
 from dsl_validator import validate_dsl
 from llm_translator import get_llm_recipe
