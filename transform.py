@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 def transform_pipeline(
     dataframes: list[pd.DataFrame],
-    keywords_list: list[list[str]],
+    keywords: list[str],
     registry_path: str = "registry.yaml",
 ) -> tuple[list[pd.DataFrame], dict[str, Any]]:
     """
@@ -32,8 +32,8 @@ def transform_pipeline(
 
     Args:
         dataframes: List of DataFrames to transform
-        keywords_list: List of keyword lists, one per DataFrame.
-                      Each inner list contains feature keywords for that DataFrame.
+        keywords: List of feature keywords to apply to all DataFrames.
+                 The same features will be applied to each DataFrame.
         registry_path: Path to the feature registry YAML file
 
     Returns:
@@ -45,23 +45,14 @@ def transform_pipeline(
     Example:
         >>> df1 = pd.DataFrame(...)
         >>> df2 = pd.DataFrame(...)
-        >>> keywords1 = ["20 day sma on close", "14 day rsi"]
-        >>> keywords2 = ["50 day ema on close", "macd"]
+        >>> keywords = ["20 day sma on close", "14 day rsi"]
         >>> enriched_dfs, metadata = transform_pipeline(
         ...     [df1, df2],
-        ...     [keywords1, keywords2]
+        ...     keywords
         ... )
         >>> print(f"Successfully transformed {len(enriched_dfs)} DataFrames")
-
-    Raises:
-        ValueError: If dataframes and keywords_list have different lengths
     """
     # Validate inputs
-    if len(dataframes) != len(keywords_list):
-        raise ValueError(
-            f"Number of DataFrames ({len(dataframes)}) must match "
-            f"number of keyword lists ({len(keywords_list)})"
-        )
 
     if not dataframes:
         logger.warning("Empty dataframes list provided to transform_pipeline")
@@ -77,7 +68,7 @@ def transform_pipeline(
         "total_errors": 0,
     }
 
-    for idx, (df, keywords) in enumerate(zip(dataframes, keywords_list)):
+    for idx, df in enumerate(dataframes):
         logger.info(f"\n{'=' * 60}")
         logger.info(f"Processing DataFrame {idx + 1}/{len(dataframes)}")
         logger.info(f"{'=' * 60}")
@@ -192,35 +183,29 @@ def transform_pipeline(
     return enriched_dataframes, pipeline_metadata
 
 
-def transform_pipeline_from_pairs(
-    df_keyword_pairs: list[tuple[pd.DataFrame, list[str]]],
+def transform_pipeline_from_list(
+    dataframes: list[pd.DataFrame],
+    keywords: list[str],
     registry_path: str = "registry.yaml",
 ) -> tuple[list[pd.DataFrame], dict[str, Any]]:
     """
-    Alternative interface that accepts DataFrame-keyword pairs.
+    Alias for transform_pipeline for backwards compatibility.
 
     Args:
-        df_keyword_pairs: List of (DataFrame, keywords) tuples
+        dataframes: List of DataFrames to transform
+        keywords: List of feature keywords to apply to all DataFrames
         registry_path: Path to the feature registry YAML file
 
     Returns:
         Same as transform_pipeline()
 
     Example:
-        >>> pairs = [
-        ...     (df1, ["20 day sma on close", "14 day rsi"]),
-        ...     (df2, ["50 day ema on close", "macd"])
-        ... ]
-        >>> enriched_dfs, metadata = transform_pipeline_from_pairs(pairs)
+        >>> enriched_dfs, metadata = transform_pipeline_from_list(
+        ...     [df1, df2],
+        ...     ["20 day sma on close", "14 day rsi"]
+        ... )
     """
-    if not df_keyword_pairs:
-        logger.warning("Empty pairs list provided to transform_pipeline_from_pairs")
-        return [], {"status": "no_data", "dataframes_processed": 0}
-
-    dataframes = [df for df, _ in df_keyword_pairs]
-    keywords_list = [keywords for _, keywords in df_keyword_pairs]
-
-    return transform_pipeline(dataframes, keywords_list, registry_path)
+    return transform_pipeline(dataframes, keywords, registry_path)
 
 
 def transform_single(
@@ -245,7 +230,7 @@ def transform_single(
         >>> enriched_df, metadata = transform_single(df, keywords)
     """
     enriched_dfs, pipeline_metadata = transform_pipeline(
-        [df], [keywords], registry_path
+        [df], keywords, registry_path
     )
 
     # Extract single result
@@ -293,13 +278,12 @@ if __name__ == "__main__":
         }
     )
 
-    # Define keywords for each DataFrame
-    keywords1 = ["20 day sma on close", "14 day rsi"]
-    keywords2 = ["50 day ema on close", "macd with 12, 26, 9"]
+    # Define keywords to apply to all DataFrames
+    keywords = ["20 day sma on close", "14 day rsi"]
 
     # Run transform pipeline
     enriched_dfs, metadata = transform_pipeline(
-        [sample_df1, sample_df2], [keywords1, keywords2]
+        [sample_df1, sample_df2], keywords
     )
 
     print(f"\nProcessed {len(enriched_dfs)} DataFrames")
