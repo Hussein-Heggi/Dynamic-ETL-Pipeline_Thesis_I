@@ -141,14 +141,36 @@ def transform_pipeline(
                         f"{cleaned_df.shape[1]} -> {enriched_df.shape[1]} columns"
                     )
 
-            result["final_shape"] = enriched_df.shape
+            # Phase 3: Post-Enrichment Data Cleaning
+            logger.info(f"[DataFrame {idx + 1}] Phase 3: Post-Enrichment Cleaning")
+            final_df, post_cleaning_report = pipeline_clean(enriched_df)
+            result["post_enrichment_cleaning"] = post_cleaning_report
+            result["post_cleaned_shape"] = final_df.shape
+
+            if final_df.empty:
+                logger.warning(
+                    f"[DataFrame {idx + 1}] Post-enrichment cleaning resulted in empty DataFrame"
+                )
+                result["status"] = "empty_after_post_cleaning"
+                result["errors"].append("DataFrame is empty after post-enrichment cleaning")
+                enriched_dataframes.append(final_df)
+                pipeline_metadata["results"].append(result)
+                pipeline_metadata["total_errors"] += 1
+                continue
+
+            logger.info(
+                f"[DataFrame {idx + 1}] Post-enrichment cleaning complete: "
+                f"{enriched_df.shape[0]} -> {final_df.shape[0]} rows"
+            )
+
+            result["final_shape"] = final_df.shape
             result["status"] = (
                 "success"
                 if enrichment_metadata.get("success", True)
                 else "partial_success"
             )
 
-            enriched_dataframes.append(enriched_df)
+            enriched_dataframes.append(final_df)
 
         except Exception as e:
             logger.error(
