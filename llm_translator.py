@@ -14,9 +14,18 @@ model = (
 )
 
 
-def get_llm_recipe(user_keywords: list[str], allowed_features_prompt: str) -> str:
+def get_llm_recipe(
+    user_keywords: list[str],
+    allowed_features_prompt: str,
+    available_columns: list[str],
+) -> str:
     """
     Calls the OpenAI API to translate user keywords into a DSL JSON recipe.
+
+    Args:
+        user_keywords: List of feature keywords from the user
+        allowed_features_prompt: Formatted description of available features
+        available_columns: List of column names available in the DataFrame
     """
 
     system_prompt = f"""
@@ -95,6 +104,13 @@ CUSTOM FEATURES:
 
 ALLOWED FEATURES:
 {allowed_features_prompt}
+
+AVAILABLE DATAFRAME COLUMNS:
+The DataFrame you are working with has the following columns available:
+{', '.join(available_columns)}
+
+When specifying column parameters (like "on", "high", "low", "close", "volume", etc.),
+you MUST use only the columns listed above.
 """
 
     # the specific task for this run

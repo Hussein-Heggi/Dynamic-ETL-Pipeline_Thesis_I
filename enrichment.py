@@ -323,8 +323,11 @@ def enrich_dataframe_from_keywords(
     # Create allowed features prompt from registry
     allowed_features_prompt = _create_features_prompt(registry)
 
+    # Get available columns from the DataFrame
+    available_columns = list(df.columns)
+
     # Get DSL from LLM
-    dsl_string = get_llm_recipe(user_keywords, allowed_features_prompt)
+    dsl_string = get_llm_recipe(user_keywords, allowed_features_prompt, available_columns)
 
     # Validate and enrich DSL with defaults
     dsl, errors = validate_dsl(dsl_string, registry)
